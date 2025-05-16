@@ -1,47 +1,42 @@
-import * as React from 'react';
-import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
-import { createStackNavigator } from '@react-navigation/stack';
-import Colors from './constants/colors';
-import { useFonts } from 'expo-font';
-import { Provider as PaperProvider } from 'react-native-paper';
+import React from "react";
+import { NavigationContainer } from "@react-navigation/native";
+import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
+import Perfil from "./src/pages/Perfil";
+import CodigoQR from "./src/pages/CodigoQR";
+import Hospitais from "./src/pages/hospitais";
+import Cupao from "./src/pages/Cupao";
+import Parceiros from "./src/pages/Parceiros";
+import Historico from "./src/pages/Historico";
+import Home from "./src/pages/Home";
+import Login from "./src/pages/Login";
+import RegisterScreen from "./src/pages/RegisterScreen";
+import UltimosDadosScreen from "./src/pages/UltimosDadosScreen";
+import WelcomeScreen from "./src/pages/WelcomeScreen";
+import Formulario from "./src/pages/Formulario";
 
-/*SCREENS*/
-import WelcomeScreen from './screens/WelcomeScreen'; //Tela inicial
-import RegisterScreen from './screens/RegisterScreen';
-import UltimosDadosScreen from './screens/UltimosDadosScreen';
-import HomeScreen from './screens/Home'; //Tela principal 
-import LoginScreen from './screens/Login'; //Tela de login
-/**/
-
-const Stack = createStackNavigator();
+const Stack = createNativeStackNavigator();
 
 export default function App() {
-
-
   return (
-    <PaperProvider>
-      <StatusBar style='auto'/>
-        <NavigationContainer screenOptions={{headerShown: false}}>
-          <Stack.Navigator>
-            <Stack.Screen name="BloodPoint" component={WelcomeScreen} />
-            <Stack.Screen name="Register" component={RegisterScreen} />
-            <Stack.Screen name="UltimosDados" component={UltimosDadosScreen} />
-            <Stack.Screen name="Home" component={HomeScreen} />
-            <Stack.Screen name="Login" component={LoginScreen} />
-          </Stack.Navigator>
-        </NavigationContainer>
-    </PaperProvider>
+    <NavigationContainer>
+      <Stack.Navigator
+        initialRouteName="Bem vindo"
+        screenOptions={{ headerShown: false }}
+      >
+        <Stack.Screen name="Bem vindo" component={WelcomeScreen} />
+        <Stack.Screen name="Hospitais" component={Hospitais} />
+        <Stack.Screen name="Perfil" component={Perfil} />
+        <Stack.Screen name="CodigoQr" component={CodigoQR} />
+        <Stack.Screen name="Cupao" component={Cupao} />
+        <Stack.Screen name="Parceiros" component={Parceiros} />
+        <Stack.Screen name="Historico" component={Historico} />
+        <Stack.Screen name="Home" component={Home} />
+        <Stack.Screen name="Login" component={Login} />
+        <Stack.Screen name="RegisterScreen" component={RegisterScreen} />
+        <Stack.Screen name="Ultimos dados" component={UltimosDadosScreen} />
+        <Stack.Screen name="Formulario" component={Formulario} />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-});
