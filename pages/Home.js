@@ -1,3 +1,4 @@
+// src/pages/Home.js
 import React, { useEffect, useRef, useState } from "react";
 import {
   View,
@@ -13,13 +14,14 @@ import {
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
 import { Text } from "react-native-paper";
-import { supabase } from "../global/supabaseClient";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
+import { supabase } from "../global/supabaseClient";
 
 const { width } = Dimensions.get("window");
 const CARD_WIDTH = width * 0.82;
 
 export default function HomeScreen({ route, navigation }) {
+  /* ─────────────  CAROUSEL  ───────────── */
   const curiosidades = [
     {
       id: "1",
@@ -32,42 +34,49 @@ export default function HomeScreen({ route, navigation }) {
     {
       id: "3",
       description:
-        "O corpo de um adulto tem em média cerca de 5 litros de sangue.",
+        "O corpo de um adulto tem em média cerca de 5 litros de sangue.",
     },
   ];
-
   const [slideIndex, setSlideIndex] = useState(0);
   const flatListRef = useRef(null);
 
+  /* ─────────────  USER DATA  ───────────── */
   const initialData = route.params?.userData || null;
   const [userData, setUserData] = useState(initialData);
-  const [loadingUser, setLoading] = useState(!initialData);
+  const [loadingUser, setLoadingUser] = useState(!initialData);
 
-  const insets = useSafeAreaInsets();
-
-  // Estado para o tab ativo do footer
+  /* ─────────────  FOOTER TAB  ───────────── */
   const [activeTab, setActiveTab] = useState("Home");
 
+  /* ─────────────  INSETS  ───────────── */
+  const insets = useSafeAreaInsets();
+
+  /* ─────────────  FETCH USER (se necessário)  ───────────── */
   useEffect(() => {
-    if (userData) return;
+    if (userData?.nome?.trim()) return; // já temos dados
     (async () => {
       const {
-        data: { user },
+        data: { user: authUser },
       } = await supabase.auth.getUser();
-      if (!user) {
-        setLoading(false);
+      if (!authUser) {
+        setLoadingUser(false);
         return;
       }
+
       const { data } = await supabase
         .from("utilizadores")
-        .select("nome, idade, tipo_sanguineo")
+        .select("nome,name,idade,tipo_sanguineo")
         .eq("id", user.id)
         .maybeSingle();
-      setUserData(data || null);
-      setLoading(false);
+
+      setUserData(
+        data ? { ...data, nome: data?.nome ?? data?.name ?? "" } : null
+      );
+      setLoadingUser(false);
     })();
   }, []);
 
+  /* ─────────────  CAROUSEL SLIDE AUTO  ───────────── */
   useEffect(() => {
     const timer = setInterval(() => {
       const next = (slideIndex + 1) % curiosidades.length;
@@ -77,14 +86,15 @@ export default function HomeScreen({ route, navigation }) {
     return () => clearInterval(timer);
   }, [slideIndex]);
 
-  // Agora vai sempre para o Formulario
-  const handleFormPress = () => {
-    navigation.navigate("Formulario");
-  };
-
+  /* ─────────────  DERIVED VALUES  ───────────── */
+  const displayName = userData?.nome?.trim() || "Doador";
   const bloodType = userData?.tipo_sanguineo ?? "--";
   const age = userData?.idade ?? "--";
 
+  /* ─────────────  HANDLERS  ───────────── */
+  const handleFormPress = () => navigation.navigate("Formulario");
+
+  /* ─────────────  RENDER  ───────────── */
   return (
     <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
       <ScrollView
@@ -94,6 +104,7 @@ export default function HomeScreen({ route, navigation }) {
         ]}
         showsVerticalScrollIndicator={false}
       >
+        {/*  CAROUSEL  */}
         <FlatList
           ref={flatListRef}
           data={curiosidades}
@@ -112,28 +123,32 @@ export default function HomeScreen({ route, navigation }) {
           )}
         />
 
-        {/* CORRIGIDO: Dots renderizados corretamente */}
+        {/*  DOTS  */}
         <View style={styles.dotsRow}>
           {curiosidades.map((_, i) => (
             <Text
-              key={`dot-${i}`}
-              style={[styles.dot, i === slideIndex ? styles.dotActive : null]}
+              key={i}
+              style={[styles.dot, i === slideIndex && styles.dotActive]}
             >
               {"\u2022"}
             </Text>
           ))}
         </View>
 
+        {/*  SAUDAÇÃO  */}
         {loadingUser ? (
           <ActivityIndicator color="#c62828" />
         ) : (
-          <Text style={styles.welcome}>
-            Olá, {String(userData?.nome || "Doador")}
-          </Text>
+          <Text style={styles.welcome}>Olá, {displayName}</Text>
         )}
 
+        {/*  INFO CARDS  */}
         <View style={styles.infoRow}>
-          <TouchableOpacity style={styles.infoCard} activeOpacity={0.8}>
+          <TouchableOpacity
+            style={styles.infoCard}
+            activeOpacity={0.8}
+            onPress={() => navigation.navigate("Perfil", { userData })}
+          >
             <View style={styles.infoCardInner}>
               <Icon name="water" size={28} color="#c62828" />
               <Text style={styles.infoLabel}>Tipo Sanguíneo</Text>
@@ -150,6 +165,7 @@ export default function HomeScreen({ route, navigation }) {
           </TouchableOpacity>
         </View>
 
+        {/*  FORM BUTTON  */}
         <TouchableOpacity
           style={styles.formCard}
           activeOpacity={0.85}
@@ -164,7 +180,7 @@ export default function HomeScreen({ route, navigation }) {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* FOOTER dinâmico: só o botão ativo fica vermelho, os outros ficam brancos */}
+      {/*  FOOTER NAV  */}
       <View style={[styles.footer, { paddingBottom: insets.bottom || 12 }]}>
         <TouchableOpacity
           onPress={() => {
@@ -182,6 +198,7 @@ export default function HomeScreen({ route, navigation }) {
             color={activeTab === "Hospitais" ? "#fff" : "#555"}
           />
         </TouchableOpacity>
+
         <TouchableOpacity
           onPress={() => {
             setActiveTab("Home");
@@ -198,6 +215,7 @@ export default function HomeScreen({ route, navigation }) {
             color={activeTab === "Home" ? "#fff" : "#555"}
           />
         </TouchableOpacity>
+
         <TouchableOpacity
           onPress={() => {
             setActiveTab("Perfil");
@@ -219,9 +237,11 @@ export default function HomeScreen({ route, navigation }) {
   );
 }
 
+/* ─────────────  STYLES  ───────────── */
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: "#fff" },
   content: { paddingTop: 40, paddingHorizontal: 16 },
+
   cardWrapper: {
     width: CARD_WIDTH,
     marginRight: 14,
@@ -233,15 +253,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   carouselText: { color: "#fff", fontSize: 16, textAlign: "center" },
+
   dotsRow: {
     flexDirection: "row",
     justifyContent: "center",
-    marginTop: 8,
-    marginBottom: 24,
+    marginVertical: 16,
   },
   dot: { fontSize: 18, color: "#bbb", marginHorizontal: 2 },
   dotActive: { color: "#c62828" },
+
   welcome: { fontSize: 22, fontWeight: "bold", marginBottom: 20 },
+
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -267,6 +289,7 @@ const styles = StyleSheet.create({
   },
   infoLabel: { color: "#666", marginTop: 6, fontSize: 13 },
   infoValue: { fontSize: 18, fontWeight: "bold", marginTop: 4 },
+
   formCard: {
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -286,8 +309,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  formLabel: { fontSize: 16, fontWeight: "600", color: "#333" },
   formCTAText: { fontSize: 16, color: "#333", marginRight: 8 },
+
   footer: {
     position: "absolute",
     bottom: 0,

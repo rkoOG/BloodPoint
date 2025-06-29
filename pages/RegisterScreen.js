@@ -1,3 +1,4 @@
+// src/pages/RegisterScreen.js
 import React, { useState } from "react";
 import { View, ScrollView, Text, StyleSheet } from "react-native";
 import {
@@ -10,7 +11,8 @@ import {
 import Colors from "../constants/colors";
 import { supabase } from "../global/supabaseClient";
 
-function RegisterScreen({ navigation }) {
+export default function RegisterScreen({ navigation }) {
+  /* ─────────────  STATE  ───────────── */
   const [nome, setNome] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -19,104 +21,93 @@ function RegisterScreen({ navigation }) {
   const [loading, setLoading] = useState(false);
   const [snackbarMsg, setSnackbarMsg] = useState("");
   const [snackbarVisible, setSnackbarVisible] = useState(false);
-  const [attemptCount, setAttemptCount] = useState(0); // NOVO
+  const [attemptCount, setAttemptCount] = useState(0);
 
+  /* ─────────────  HELPERS  ───────────── */
   function showMessage(msg) {
     setSnackbarMsg(msg);
     setSnackbarVisible(true);
   }
 
+  /* ─────────────  REGISTER  ───────────── */
   async function handleRegister() {
-    if (attemptCount >= 5) {
+    /* validações rápidas */
+    if (attemptCount >= 20) {
       showMessage(
         "Limite de tentativas atingido. Por favor, tente mais tarde."
       );
       return;
     }
-
     if (!nome || !email || !password || !confirmPassword) {
       showMessage("Preencha todos os campos.");
-      setAttemptCount((prev) => prev + 1);
+      setAttemptCount((p) => p + 1);
       return;
     }
     if (password !== confirmPassword) {
       showMessage("As senhas não coincidem.");
-      setAttemptCount((prev) => prev + 1);
+      setAttemptCount((p) => p + 1);
       return;
     }
     if (!isChecked) {
       showMessage("É necessário aceitar os Termos e Condições.");
-      setAttemptCount((prev) => prev + 1);
+      setAttemptCount((p) => p + 1);
       return;
     }
 
     setLoading(true);
 
     try {
-      const { data: existingUser } = await supabase
-        .from("utilizadores")
-        .select("id")
-        .eq("email", email)
-        .single();
-
-      if (existingUser) {
-        showMessage("Este email já foi registado. Verifique o seu email.");
-        setAttemptCount((prev) => prev + 1);
-        setLoading(false);
-        return;
-      }
-
+      /* 1) Criar utilizador no Supabase Auth */
       const { data, error } = await supabase.auth.signUp({ email, password });
-
       if (error) {
-        if (error.message.includes("rate limit")) {
-          showMessage("Limite de tentativas atingido. Tente mais tarde.");
-        } else {
-          showMessage("Erro ao criar conta: " + error.message);
-        }
-        setAttemptCount((prev) => prev + 1);
-        setLoading(false);
+        showMessage("Erro ao criar conta: " + error.message);
+        setAttemptCount((p) => p + 1);
         return;
       }
 
-      const user = data.user;
-      if (!user) {
+      const authUser = data.user;
+      if (!authUser) {
         showMessage("Erro: utilizador não encontrado.");
-        setAttemptCount((prev) => prev + 1);
-        setLoading(false);
+        setAttemptCount((p) => p + 1);
         return;
       }
 
-      const { error: insertError } = await supabase
-        .from("utilizadores")
-        .insert([
-          {
-            id: user.id,
-            nome,
-            email,
-            password,
-            verified: false,
-            created_at: new Date().toISOString(),
-          },
-        ]);
+      /* 2) Guardar (ou actualizar) perfil na tabela 'utilizadores' */
+      const { error: upsertErr } = await supabase.from("utilizadores").upsert(
+        {
+          id: authUser.id, // UID do Auth  ← chave primária
+          nome: nome.trim(), // grava o nome!
+          email: authUser.email,
+          verified: false,
+          created_at: new Date().toISOString(),
+        },
+        { onConflict: "id" } // faz UPDATE se já existir esse id
+      );
 
-      if (insertError) {
-        showMessage("Erro ao guardar dados: " + insertError.message);
-        setAttemptCount((prev) => prev + 1);
-        setLoading(false);
+      if (upsertErr) {
+        showMessage("Erro ao guardar dados: " + upsertErr.message);
+        setAttemptCount((p) => p + 1);
         return;
       }
 
-      showMessage("Conta criada com sucesso! Verifique seu e-mail.");
-      navigation.navigate("UltimosDados");
+      /* 3) Tudo OK -> avisa e avança para o próximo ecrã */
+      showMessage("Conta criada com sucesso! Verifique o seu e-mail.");
+      navigation.navigate("UltimosDados", {
+        userData: {
+          id: authUser.id,
+          nome: nome.trim(),
+          email: authUser.email,
+        },
+      });
     } catch (err) {
       showMessage("Erro inesperado: " + err.message);
-      setAttemptCount((prev) => prev + 1);
+      setAttemptCount((p) => p + 1);
     } finally {
       setLoading(false);
     }
   }
 
+  /* ─────────────  UI  ───────────── */
   return (
     <ScrollView contentContainerStyle={{ padding: 20 }}>
       <TextInput
@@ -147,9 +138,9 @@ function RegisterScreen({ navigation }) {
         secureTextEntry
         style={{ marginBottom: 20 }}
       />
-      <View
-        style={{ flexDirection: "row", alignItems: "center", marginBottom: 10 }}
-      >
+
+      {/* Termos e Condições */}
+      <View style={styles.row}>
         <Checkbox
           status={isChecked ? "checked" : "unchecked"}
           onPress={() => setIsChecked(!isChecked)}
@@ -158,13 +149,14 @@ function RegisterScreen({ navigation }) {
           Aceito os{" "}
           <Text
             style={styles.sublinhado}
-            onPress={() => navigation.navigate("Termos e Condições")}
+            onPress={() => navigation.navigate("TermosCondicoes")}
           >
             Termos e Condições
           </Text>{" "}
           da BloodPoint.
         </Text>
       </View>
+
       <Button mode="contained" onPress={handleRegister} disabled={loading}>
         Registar
       </Button>
@@ -189,11 +181,11 @@ function RegisterScreen({ navigation }) {
   );
 }
 
-export default RegisterScreen;
-
+/* ─────────────  STYLES  ───────────── */
 const styles = StyleSheet.create({
   sublinhado: {
     textDecorationLine: "underline",
     color: Colors.primary500,
   },
+  row: { flexDirection: "row", alignItems: "center", marginBottom: 10 },
 });

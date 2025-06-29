@@ -15,10 +15,10 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { supabase } from "../global/supabaseClient";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-
+import { CommonActions } from "@react-navigation/native";
 /* —— USER STATE —— */
 const initialUser = {
-  name: "Insira Nome",
+  nome: "Insira Nome",
   email: "Insira Email",
   level: 1,
 };
@@ -28,6 +28,7 @@ const sectionsData = [
   { icon: "🌐", text: "Parceiros", route: "Parceiros" },
   { icon: "⏳", text: "Histórico de Doações", route: "Historico" },
   { icon: "🔳", text: "Inserir código", route: "CodigoQr" },
+  { icon: "🚪", text: "Terminar sessão", route: "Logout" },
 ];
 
 export default function Perfil() {
@@ -37,12 +38,19 @@ export default function Perfil() {
   const passedUser = route.params?.userData;
 
   const [user, setUser] = useState({
-    name: passedUser?.nome || initialUser.name,
+    nome: passedUser?.nome || initialUser.nome,
     email: passedUser?.email || initialUser.email,
     level: 1,
     phone: passedUser?.phone || "",
   });
-
+  async function handleLogout() {
+    // 1) desautentica no Supabase
+    await supabase.auth.signOut();
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "WelcomeScreen" }], // ou "Login"
+    });
+  }
   const [modalVisible, setModalVisible] = useState(false);
   const [profileImage, setProfileImage] = useState(null);
 
@@ -54,8 +62,13 @@ export default function Perfil() {
   const [activeTab, setActiveTab] = useState("Perfil");
 
   useEffect(() => {
-    if (passedUser?.email) return;
+    /* 1) Se o Perfil chegou com o nome, usa-o e sai */
+    if (passedUser?.nome?.trim()) {
+      setUser(passedUser);
+      return; // ← interrompe o efeito aqui
+    }
 
+    /* 2) Caso contrário, vai buscar-lo ao Supabase */
     (async () => {
       const {
         data: { user: authUser },
@@ -63,25 +76,21 @@ export default function Perfil() {
       } = await supabase.auth.getUser();
       if (authError || !authUser) return;
 
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from("utilizadores")
-        .select("nome, email")
+        .select("nome,name, email")
         .eq("id", authUser.id)
         .maybeSingle();
 
       if (data) {
         const fullUser = {
-          name: data.nome || initialUser.name,
+          nome: data.nome ?? data.name ?? initialUser.nome,
           email: data.email || authUser.email || initialUser.email,
           level: 1,
           phone: "",
         };
         setUser(fullUser);
-      } else if (authUser.email) {
-        setUser((prev) => ({
-          ...prev,
-          email: authUser.email,
-        }));
+        console.log("DATA PERFIL", data);
       }
     })();
   }, []);
@@ -127,7 +136,7 @@ export default function Perfil() {
           style={styles.headerButton}
           onPress={() => setShowPhoneModal(true)}
         >
-          <Text style={styles.headerIcon}>⚙️</Text>
+          <Icon name="phone" size={40} color="#000" />
         </TouchableOpacity>
       </View>
 
@@ -152,7 +161,7 @@ export default function Perfil() {
             </TouchableOpacity>
           </View>
           <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{user.name}</Text>
+            <Text style={styles.profileName}>{user.nome}</Text>
             <Text style={styles.profileEmail}>{user.email}</Text>
             {user.phone ? (
               <Text style={styles.profilePhone}>{user.phone}</Text>
@@ -166,7 +175,13 @@ export default function Perfil() {
             <TouchableOpacity
               key={s.text}
               style={styles.sectionItem}
-              onPress={() => navigation.navigate(s.route)}
+              onPress={() => {
+                if (s.route === "Logout") {
+                  handleLogout();
+                } else {
+                  navigation.navigate(s.route);
+                }
+              }}
             >
               <Text style={styles.sectionIcon}>{s.icon}</Text>
               <Text style={styles.sectionText}>{s.text}</Text>

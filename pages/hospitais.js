@@ -14,6 +14,8 @@ import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { useNavigation } from "@react-navigation/native";
 import { supabase } from "../global/supabaseClient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import DateTimePickerModal from "react-native-modal-datetime-picker";
+import uuid from "react-native-uuid";
 
 const PERKS = [
   { id: "1", title: "Desconto 1" },
@@ -25,6 +27,7 @@ const PERKS = [
 export default function Hospitais() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
+
   const [selectedTab, setSelectedTab] = useState("Hospitais");
   const [search, setSearch] = useState("");
   const [allHospitais, setAllHospitais] = useState([]);
@@ -32,63 +35,113 @@ export default function Hospitais() {
   const [sugestoes, setSugestoes] = useState([]);
   const [showSugestoes, setShowSugestoes] = useState(false);
   const [filteredHospitais, setFilteredHospitais] = useState([]);
+  const [selectedHospital, setSelectedHospital] = useState(null);
+  const [slot, setSlot] = useState(null);
+  const [pickerVisible, setPickerVisible] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const dismissKeyboard = () => {
+    if (Keyboard?.dismiss) Keyboard.dismiss();
+  };
 
   useEffect(() => {
-    // Buscar hospitais da base de dados
     const fetchHospitais = async () => {
       const { data, error } = await supabase
         .from("hospitais")
         .select("id, name, distrito");
-      if (!error && data) {
-        setAllHospitais(data);
 
-        // Extrair distritos únicos
-        const uniqueDistritos = [
-          ...new Set(data.map((h) => h.distrito && h.distrito.trim())),
-        ]
-          .filter(Boolean)
-          .sort((a, b) => a.localeCompare(b));
-        setDistritos(uniqueDistritos);
+      if (error) {
+        console.error("Erro a buscar hospitais:", error.message);
+        return;
       }
+
+      setAllHospitais(data);
+
+      const uniq = [
+        ...new Set(data.map((h) => h.distrito && h.distrito.trim())),
+      ]
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b));
+      setDistritos(uniq);
     };
+
     fetchHospitais();
   }, []);
 
-  // Atualizar sugestões e hospitais filtrados conforme o texto
   useEffect(() => {
-    if (search.trim() === "") {
+    const text = search.trim().toLowerCase();
+
+    if (!text) {
       setSugestoes(distritos);
-      setFilteredHospitais([]); // Não mostra nada
+      setFilteredHospitais([]);
       setShowSugestoes(true);
     } else {
-      // Sugestões de distritos
-      const filteredSugestoes = distritos.filter((item) =>
-        item.toLowerCase().includes(search.trim().toLowerCase())
-      );
-      setSugestoes(filteredSugestoes);
+      const sug = distritos.filter((d) => d.toLowerCase().includes(text));
+      setSugestoes(sug);
 
-      // Filtra hospitais apenas pelo distrito
-      const filtered = allHospitais.filter(
-        (h) =>
-          h.distrito &&
-          h.distrito.trim().toLowerCase().includes(search.trim().toLowerCase())
+      setFilteredHospitais(
+        allHospitais.filter(
+          (h) => h.distrito && h.distrito.trim().toLowerCase().includes(text)
+        )
       );
-      setFilteredHospitais(filtered);
-      setShowSugestoes(filteredSugestoes.length > 0);
+
+      setShowSugestoes(sug.length > 0);
     }
   }, [search, distritos, allHospitais]);
 
-  // Quando selecionas uma sugestão (distrito)
-  const handleSelectSugestao = (sugestao) => {
-    setSearch(sugestao);
-    const filtered = allHospitais.filter(
-      (h) =>
-        h.distrito &&
-        h.distrito.trim().toLowerCase() === sugestao.trim().toLowerCase()
+  const handleSelectSugestao = (d) => {
+    setSearch(d);
+    setFilteredHospitais(
+      allHospitais.filter(
+        (h) => h.distrito && h.distrito.trim().toLowerCase() === d.toLowerCase()
+      )
     );
-    setFilteredHospitais(filtered);
     setShowSugestoes(false);
-    Keyboard.dismiss();
+    dismissKeyboard();
+  };
+
+  const confirmarAgendamento = async () => {
+    if (!selectedHospital || !slot) return;
+    setSaving(true);
+
+    const {
+      data: { user },
+      error: userErr,
+    } = await supabase.auth.getUser();
+    if (userErr) {
+      alert("Não foi possível obter utilizador autenticado");
+      setSaving(false);
+      return;
+    }
+
+    const confirmCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    const { error } = await supabase.from("doacoes").insert({
+      id: uuid.v4(),
+      doador_id: user.id,
+      enfermeiro_id: null,
+      hospital_id: selectedHospital.id,
+      data_doacao: slot.toISOString(),
+      confirm_code: confirmCode,
+    });
+
+    setSaving(false);
+
+    if (error) {
+      alert("Erro ao gravar agendamento: " + error.message);
+      return;
+    }
+
+    alert(
+      `Doação marcada para ${slot.toLocaleString()} — código: ${confirmCode}`
+    );
+    cancelarAgendamento();
+  };
+
+  const cancelarAgendamento = () => {
+    setSelectedHospital(null);
+    setSlot(null);
+    setPickerVisible(false);
   };
 
   return (
@@ -98,68 +151,126 @@ export default function Hospitais() {
         <Text style={styles.headerTitle}>Agendamento de Doação</Text>
       </View>
 
-      {/* SEARCH BAR */}
+      {/* SEARCH */}
       <View style={styles.searchWrapper}>
-        <TextInput
-          placeholder="Digite o distrito do hospital…"
-          placeholderTextColor="#666"
-          style={styles.searchInput}
-          value={search}
-          onChangeText={(text) => {
-            setSearch(text);
-            setShowSugestoes(true);
-          }}
-          onFocus={() => {
-            setShowSugestoes(true);
-            setSugestoes(distritos);
-          }}
-        />
-        <TouchableOpacity
-          style={{ position: "absolute", right: 10, top: 12 }}
-          onPress={() => {
-            setShowSugestoes(false);
-            Keyboard.dismiss();
-          }}
-        >
-          <Ionicons name="search" size={22} color="#000" />
-        </TouchableOpacity>
-        {/* SUGESTÕES DE DISTRITO */}
+        <View style={styles.inputContainer}>
+          <TextInput
+            placeholder="Digite o distrito do hospital…"
+            placeholderTextColor="#666"
+            style={styles.searchInput}
+            value={search}
+            onChangeText={(t) => {
+              setSearch(t);
+              setShowSugestoes(true);
+            }}
+            onFocus={() => {
+              setShowSugestoes(true);
+              setSugestoes(distritos);
+            }}
+          />
+          <TouchableOpacity
+            style={styles.searchIcon}
+            onPress={() => {
+              setShowSugestoes(false);
+              dismissKeyboard();
+            }}
+          >
+            <Ionicons name="search" size={22} color="#000" />
+          </TouchableOpacity>
+        </View>
+
+        {/* SUGESTÕES */}
         {search.trim() !== "" && showSugestoes && sugestoes.length > 0 && (
           <View style={styles.suggestionsContainer}>
-            {sugestoes.map((item) => (
+            {sugestoes.map((d) => (
               <TouchableOpacity
-                key={item}
+                key={d}
                 style={styles.suggestionItem}
-                onPress={() => handleSelectSugestao(item)}
+                onPress={() => handleSelectSugestao(d)}
               >
-                <Text style={styles.suggestionText}>{item}</Text>
+                <Text style={styles.suggestionText}>{d}</Text>
               </TouchableOpacity>
             ))}
           </View>
         )}
       </View>
 
-      {/* LISTA DE HOSPITAIS FILTRADOS (só aparece se search não está vazio) */}
+      {/* DATE TIME PICKER MODAL */}
+      <DateTimePickerModal
+        isVisible={pickerVisible}
+        mode="datetime"
+        minuteInterval={5}
+        minimumDate={new Date()}
+        onConfirm={(date) => {
+          setSlot(date);
+          setPickerVisible(false);
+        }}
+        onCancel={() => setPickerVisible(false)}
+        locale="pt-PT"
+        is24Hour
+      />
+
+      {/* LISTA DE HOSPITAIS */}
       {search.trim() !== "" && (
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Hospitais encontrados</Text>
           <FlatList
             data={filteredHospitais}
-            keyExtractor={(item) => String(item.id)}
+            keyExtractor={(i) => String(i.id)}
             ListEmptyComponent={
-              <Text
-                style={{ color: "#666", textAlign: "center", marginTop: 20 }}
-              >
-                Nenhum hospital encontrado para esse distrito.
-              </Text>
+              <Text style={styles.emptyText}>Nenhum hospital encontrado.</Text>
             }
             renderItem={({ item }) => (
-              <View style={styles.localCard}>
+              <TouchableOpacity
+                style={styles.localCard}
+                onPress={() => {
+                  setSelectedHospital(item);
+                  setSlot(new Date());
+                }}
+              >
                 <Text style={styles.localText}>{item.name}</Text>
                 <Text style={styles.localText}>{item.distrito}</Text>
-              </View>
+              </TouchableOpacity>
             )}
           />
+        </View>
+      )}
+
+      {selectedHospital && (
+        <View style={styles.inlineModal}>
+          <Text style={styles.modalTitle}>{selectedHospital.name}</Text>
+          <Text style={styles.modalSub}>{selectedHospital.distrito}</Text>
+          <Text style={styles.modalLabel}>Data &amp; hora escolhidas:</Text>
+          <Text style={styles.modalDate}>
+            {slot ? slot.toLocaleString() : "—"}
+          </Text>
+          <TouchableOpacity
+            style={styles.agendarBtn}
+            onPress={() => setPickerVisible(true)}
+          >
+            <Text style={{ color: "#fff" }}>Escolher data e hora</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.agendarBtn,
+              {
+                backgroundColor: saving ? "#999" : "#4CAF50",
+                marginTop: 12,
+              },
+            ]}
+            onPress={confirmarAgendamento}
+            disabled={saving || !slot}
+          >
+            <Text style={{ color: "#fff" }}>
+              {saving ? "A gravar…" : "Confirmar"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.modalCancel}
+            onPress={cancelarAgendamento}
+          >
+            <Text style={{ color: "#c62828" }}>Cancelar / Fechar</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -174,7 +285,7 @@ export default function Hospitais() {
           horizontal
           data={PERKS}
           showsHorizontalScrollIndicator={false}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(i) => i.id}
           renderItem={({ item }) => (
             <View style={styles.perkCard}>
               <Text style={styles.perkPhoto}>Foto</Text>
@@ -182,22 +293,23 @@ export default function Hospitais() {
             </View>
           )}
         />
+
         <TouchableOpacity onPress={() => navigation.navigate("Perks")}>
           <Text style={styles.moreLink}>Veja mais…</Text>
         </TouchableOpacity>
       </View>
 
-      {/* FOOTER dinâmico */}
+      {/* FOOTER */}
       <View style={[styles.footer, { paddingBottom: insets.bottom || 12 }]}>
         <TouchableOpacity
-          onPress={() => {
-            setSelectedTab("Hospitais");
-            navigation.navigate("Hospitais");
-          }}
           style={[
             styles.footerBtn,
             selectedTab === "Hospitais" && styles.footerBtnActive,
           ]}
+          onPress={() => {
+            setSelectedTab("Hospitais");
+            navigation.navigate("Hospitais");
+          }}
         >
           <Icon
             name="magnify"
@@ -205,15 +317,16 @@ export default function Hospitais() {
             color={selectedTab === "Hospitais" ? "#fff" : "#555"}
           />
         </TouchableOpacity>
+
         <TouchableOpacity
-          onPress={() => {
-            setSelectedTab("Home");
-            navigation.navigate("Home");
-          }}
           style={[
             styles.footerBtn,
             selectedTab === "Home" && styles.footerBtnActive,
           ]}
+          onPress={() => {
+            setSelectedTab("Home");
+            navigation.navigate("Home");
+          }}
         >
           <Icon
             name="home"
@@ -221,15 +334,16 @@ export default function Hospitais() {
             color={selectedTab === "Home" ? "#fff" : "#555"}
           />
         </TouchableOpacity>
+
         <TouchableOpacity
-          onPress={() => {
-            setSelectedTab("Perfil");
-            navigation.navigate("Perfil");
-          }}
           style={[
             styles.footerBtn,
             selectedTab === "Perfil" && styles.footerBtnActive,
           ]}
+          onPress={() => {
+            setSelectedTab("Perfil");
+            navigation.navigate("Perfil");
+          }}
         >
           <Icon
             name="account"
@@ -243,24 +357,45 @@ export default function Hospitais() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: "#fff" },
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#fff",
+  },
   header: {
     paddingTop: 50,
     paddingHorizontal: 16,
     backgroundColor: "#EF3C3C",
     alignItems: "center",
   },
-  headerTitle: { color: "#fff", fontSize: 18, fontWeight: "bold" },
-  searchWrapper: { marginTop: 40, alignSelf: "center", width: "80%" },
-  searchInput: {
-    width: "100%",
-    padding: 14,
-    paddingLeft: 24,
+  headerTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  searchWrapper: {
+    marginTop: 40,
+    alignSelf: "center",
+    width: "80%",
+  },
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#e5e5e5",
     borderRadius: 50,
-    fontSize: 15,
+    paddingHorizontal: 10,
+    marginBottom: 2,
   },
-  searchIcon: { position: "absolute", right: 20, top: 14 },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingLeft: 14,
+    fontSize: 15,
+    backgroundColor: "transparent",
+  },
+  searchIcon: {
+    padding: 6,
+    marginLeft: 4,
+  },
   suggestionsContainer: {
     position: "absolute",
     top: 54,
@@ -278,10 +413,23 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#eee",
   },
-  suggestionText: { fontSize: 15, color: "#333" },
-  section: { marginTop: 32, paddingHorizontal: 16 },
-  sectionTitle: { fontSize: 18, fontWeight: "bold" },
-  sectionSub: { fontSize: 12, color: "#555", marginBottom: 12 },
+  suggestionText: {
+    fontSize: 15,
+    color: "#333",
+  },
+  section: {
+    marginTop: 32,
+    paddingHorizontal: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  sectionSub: {
+    fontSize: 12,
+    color: "#555",
+    marginBottom: 12,
+  },
   localCard: {
     width: "100%",
     backgroundColor: "#fff",
@@ -294,8 +442,21 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
   },
-  localText: { color: "#333", fontSize: 16, marginBottom: 2 },
-  perkCard: { width: 90, marginHorizontal: 6, alignItems: "center" },
+  localText: {
+    color: "#333",
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  emptyText: {
+    color: "#666",
+    textAlign: "center",
+    marginTop: 20,
+  },
+  perkCard: {
+    width: 90,
+    marginHorizontal: 6,
+    alignItems: "center",
+  },
   perkPhoto: {
     width: "100%",
     aspectRatio: 1,
@@ -305,8 +466,16 @@ const styles = StyleSheet.create({
     textAlignVertical: "center",
     color: "#666",
   },
-  perkText: { fontSize: 11, textAlign: "center", marginTop: 4 },
-  moreLink: { color: "#007AFF", marginTop: 6, alignSelf: "flex-end" },
+  perkText: {
+    fontSize: 11,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  moreLink: {
+    color: "#007AFF",
+    marginTop: 6,
+    alignSelf: "flex-end",
+  },
   footer: {
     position: "absolute",
     bottom: 0,
@@ -319,13 +488,93 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: "#ddd",
   },
-  footerBtn: { flex: 1, alignItems: "center", paddingVertical: 10 },
+  footerBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 10,
+  },
   footerBtnActive: {
     backgroundColor: "#c62828",
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
   },
-  navItem: { alignItems: "center", flex: 1 },
-  navItemText: { fontSize: 12, color: "#999" },
-  navItemTextActive: { fontSize: 12, color: "#000", fontWeight: "bold" },
+  overlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 20,
+  },
+  modal: {
+    width: "90%", // aumenta a largura
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    paddingVertical: 28, // mais espaço vertical
+    paddingHorizontal: 18, // mais espaço horizontal
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  inlineModal: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: "#c62828",
+    marginHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 16,
+    paddingVertical: 24,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    shadowColor: "#c62828",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#c62828",
+    marginBottom: 8,
+    textAlign: "center",
+    width: "100%",
+  },
+  modalSub: {
+    color: "#c62828",
+    fontWeight: "600",
+    marginBottom: 16,
+    fontSize: 16,
+    textAlign: "center",
+  },
+  modalLabel: {
+    color: "#c62828",
+    marginBottom: 4,
+    fontWeight: "bold",
+    fontSize: 15,
+    textAlign: "center",
+  },
+  modalDate: {
+    marginBottom: 16,
+    fontWeight: "bold",
+    color: "#333",
+    fontSize: 16,
+    textAlign: "center",
+  },
+  agendarBtn: {
+    backgroundColor: "#c62828",
+    paddingVertical: 12,
+    paddingHorizontal: 28,
+    borderRadius: 8,
+    width: "100%",
+    alignItems: "center",
+  },
+  modalCancel: {
+    marginTop: 18,
+    width: "100%",
+    alignItems: "center",
+  },
 });

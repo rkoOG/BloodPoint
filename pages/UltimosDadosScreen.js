@@ -1,21 +1,28 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
-import { TextInput, Menu, Provider } from 'react-native-paper';
-import { useNavigation } from '@react-navigation/native';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useState } from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
+import { TextInput, Menu, Provider } from "react-native-paper";
+import { useNavigation } from "@react-navigation/native";
+import { Ionicons } from "@expo/vector-icons";
 
-import Colors from '../constants/colors';
-import PrimaryButton from '../components/ui/PrimaryButton';
+import Colors from "../constants/colors";
+import PrimaryButton from "../components/ui/PrimaryButton";
 
 function UltimosDadosScreen() {
   const navigation = useNavigation();
 
-  const [numeroUtente, setNumeroUtente] = useState('');
-  const [idade, setIdade] = useState('');
-  const [bloodType, setBloodType] = useState('');
+  const [numeroUtente, setNumeroUtente] = useState("");
+  const [idade, setIdade] = useState("");
+  const [bloodType, setBloodType] = useState("");
   const [menuVisible, setMenuVisible] = useState(false);
 
-  const bloodTypes = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'];
+  const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
   function goBack() {
     navigation.goBack();
@@ -27,9 +34,9 @@ function UltimosDadosScreen() {
 
   return (
     <Provider>
-      <KeyboardAvoidingView 
-        style={styles.container} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      <KeyboardAvoidingView
+        style={styles.container}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <TouchableOpacity onPress={goBack} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="black" />
@@ -83,7 +90,7 @@ function UltimosDadosScreen() {
         </View>
 
         <View style={{ marginTop: 30 }}>
-          <PrimaryButton onPress={handleSubmit} >Registar!</PrimaryButton>
+          <PrimaryButton onPress={handleSubmit}>Registar!</PrimaryButton>
         </View>
       </KeyboardAvoidingView>
     </Provider>
@@ -94,7 +101,9 @@ function UltimosDadosScreen() {
       alert("Preencha todos os campos.");
       return;
     }
-    navigation.navigate('Home'); 
+    navigation.navigate("Home", {
+      userData: { nome, idade, tipo_sanguineo },
+    });
   }
 }
 
@@ -103,50 +112,50 @@ export default UltimosDadosScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     paddingHorizontal: 20,
     paddingTop: 80,
-    alignItems: 'center',
+    alignItems: "center",
   },
   backButton: {
-    position: 'absolute',
+    position: "absolute",
     top: 20,
     left: 20,
   },
   title: {
     fontSize: 24,
-    fontWeight: 'bold',
-    alignSelf: 'flex-start',
+    fontWeight: "bold",
+    alignSelf: "flex-start",
     marginBottom: 50,
   },
   input: {
-    width: '100%',
+    width: "100%",
     marginBottom: 20,
-    backgroundColor: 'white',
-    shadowColor: '#000',
+    backgroundColor: "white",
+    shadowColor: "#000",
     shadowOffset: { width: -2, height: -2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 15,
   },
   row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap:10,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10,
   },
   inputIdade: {
-    width: '25%',
-    backgroundColor: 'white',
-    shadowColor: '#000',
+    width: "25%",
+    backgroundColor: "white",
+    shadowColor: "#000",
     shadowOffset: { width: -2, height: -2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 15,
   },
   inputTipoSanguineo: {
-    width: '75%',
-    backgroundColor: 'white',
-    shadowColor: '#000',
+    width: "75%",
+    backgroundColor: "white",
+    shadowColor: "#000",
     shadowOffset: { width: -2, height: -2 },
     shadowOpacity: 0.05,
     shadowRadius: 4,
