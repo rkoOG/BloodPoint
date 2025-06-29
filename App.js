@@ -21,10 +21,10 @@ export default function App() {
   return (
     <NavigationContainer>
       <Stack.Navigator
-        initialRouteName="Bem vindo"
+        initialRouteName="WelcomeScreen"
         screenOptions={{ headerShown: false }}
       >
-        <Stack.Screen name="Bem vindo" component={WelcomeScreen} />
+        <Stack.Screen name="WelcomeScreen" component={WelcomeScreen} />
         <Stack.Screen name="Hospitais" component={Hospitais} />
         <Stack.Screen name="Perfil" component={Perfil} />
         <Stack.Screen name="CodigoQr" component={CodigoQR} />
