@@ -4,151 +4,156 @@ import {
   Text,
   StyleSheet,
   TextInput,
-  FlatList,
   TouchableOpacity,
   Keyboard,
   SafeAreaView,
+  Alert,
+  ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { supabase } from "../global/supabaseClient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import uuid from "react-native-uuid";
 
-const PERKS = [
-  { id: "1", title: "Desconto 1" },
-  { id: "2", title: "Oferta 2" },
-  { id: "3", title: "Cupão 3" },
-  { id: "4", title: "Voucher 4" },
-];
+/**
+ * Estados de doação permitidos na BD
+ */
+export const STATUS = {
+  PENDENTE: "Pendente",
+  CONFIRMADA: "Confirmada",
+  CANCELADA: "Cancelada",
+};
 
+/**
+ * Hospitais – pesquisa → escolhe data/hora → grava doação.
+ */
 export default function Hospitais() {
   const navigation = useNavigation();
+  const route = useRoute();
+  const passedUser = route.params?.userData || null;
   const insets = useSafeAreaInsets();
 
-  const [selectedTab, setSelectedTab] = useState("Hospitais");
+  /* ─────────────── STATE ─────────────── */
   const [search, setSearch] = useState("");
-  const [allHospitais, setAllHospitais] = useState([]);
+  const [allHospitais, setAll] = useState([]);
   const [distritos, setDistritos] = useState([]);
   const [sugestoes, setSugestoes] = useState([]);
-  const [showSugestoes, setShowSugestoes] = useState(false);
-  const [filteredHospitais, setFilteredHospitais] = useState([]);
-  const [selectedHospital, setSelectedHospital] = useState(null);
+  const [showSug, setShowSug] = useState(false);
+  const [filtered, setFiltered] = useState([]);
+  const [selected, setSelected] = useState(null);
   const [slot, setSlot] = useState(null);
-  const [pickerVisible, setPickerVisible] = useState(false);
+  const [pickerVisible, setPicker] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState("Hospitais"); // footer
 
-  const dismissKeyboard = () => {
-    if (Keyboard?.dismiss) Keyboard.dismiss();
-  };
+  const dismiss = () => Keyboard?.dismiss?.();
 
+  /* ───── FETCH HOSPITAIS ───── */
   useEffect(() => {
-    const fetchHospitais = async () => {
+    (async () => {
       const { data, error } = await supabase
         .from("hospitais")
         .select("id, name, distrito");
-
       if (error) {
-        console.error("Erro a buscar hospitais:", error.message);
+        console.error(error.message);
         return;
       }
 
-      setAllHospitais(data);
-
-      const uniq = [
-        ...new Set(data.map((h) => h.distrito && h.distrito.trim())),
-      ]
+      setAll(data);
+      const uniq = [...new Set(data.map((h) => h.distrito?.trim()))]
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b));
       setDistritos(uniq);
-    };
-
-    fetchHospitais();
+      setSugestoes(uniq);
+    })();
   }, []);
 
+  /* ───── FILTRO PESQUISA ───── */
   useEffect(() => {
-    const text = search.trim().toLowerCase();
-
-    if (!text) {
+    const txt = search.trim().toLowerCase();
+    if (!txt) {
       setSugestoes(distritos);
-      setFilteredHospitais([]);
-      setShowSugestoes(true);
-    } else {
-      const sug = distritos.filter((d) => d.toLowerCase().includes(text));
-      setSugestoes(sug);
-
-      setFilteredHospitais(
-        allHospitais.filter(
-          (h) => h.distrito && h.distrito.trim().toLowerCase().includes(text)
-        )
-      );
-
-      setShowSugestoes(sug.length > 0);
+      setFiltered([]);
+      setShowSug(true);
+      return;
     }
+    setSugestoes(distritos.filter((d) => d.toLowerCase().includes(txt)));
+    setFiltered(
+      allHospitais.filter((h) => h.distrito?.trim().toLowerCase().includes(txt))
+    );
+    setShowSug(true);
   }, [search, distritos, allHospitais]);
 
-  const handleSelectSugestao = (d) => {
+  const pickSugestao = (d) => {
     setSearch(d);
-    setFilteredHospitais(
+    setFiltered(
       allHospitais.filter(
-        (h) => h.distrito && h.distrito.trim().toLowerCase() === d.toLowerCase()
+        (h) => h.distrito?.trim().toLowerCase() === d.toLowerCase()
       )
     );
-    setShowSugestoes(false);
-    dismissKeyboard();
+    setShowSug(false);
+    dismiss();
   };
 
+  /* ───── CONFIRMAR ───── */
   const confirmarAgendamento = async () => {
-    if (!selectedHospital || !slot) return;
-    setSaving(true);
+    if (!selected) {
+      Alert.alert("Escolhe o hospital");
+      return;
+    }
+    if (!slot) {
+      Alert.alert("Escolhe data/hora");
+      return;
+    }
 
+    setSaving(true);
     const {
       data: { user },
-      error: userErr,
     } = await supabase.auth.getUser();
-    if (userErr) {
-      alert("Não foi possível obter utilizador autenticado");
+    if (!user) {
+      Alert.alert("Sessão expirada");
       setSaving(false);
       return;
     }
 
-    const confirmCode = Math.floor(100000 + Math.random() * 900000).toString();
+    const code = Math.random().toString(36).slice(-6).toUpperCase();
 
     const { error } = await supabase.from("doacoes").insert({
-      id: uuid.v4(),
       doador_id: user.id,
-      enfermeiro_id: null,
-      hospital_id: selectedHospital.id,
+      hospital_id: selected.id,
+      hospital_name: selected.name,
       data_doacao: slot.toISOString(),
-      confirm_code: confirmCode,
+      confirm_code: code,
+      status: STATUS.PENDENTE, // <── agora compatível com o constraint
     });
 
     setSaving(false);
-
     if (error) {
-      alert("Erro ao gravar agendamento: " + error.message);
+      Alert.alert("Erro", error.message);
       return;
     }
 
-    alert(
-      `Doação marcada para ${slot.toLocaleString()} — código: ${confirmCode}`
+    Alert.alert(
+      "Agendado!",
+      `Código ${code}.\nVê em Perfil → Histórico de Doações.`
     );
-    cancelarAgendamento();
+    navigation.navigate("Perfil", { userData: passedUser });
   };
 
-  const cancelarAgendamento = () => {
-    setSelectedHospital(null);
-    setSlot(null);
-    setPickerVisible(false);
+  /* ───── NAVEGAÇÃO FOOTER ───── */
+  const goTo = (screen) => {
+    setActiveTab(screen);
+    navigation.navigate(screen, { userData: passedUser });
   };
 
+  /* ───── RENDER ───── */
   return (
-    <SafeAreaView style={styles.safeArea} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.safeArea}>
       {/* HEADER */}
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Agendamento de Doação</Text>
+        <Text style={styles.headerTitle}>Agendar Doação</Text>
       </View>
 
       {/* SEARCH */}
@@ -161,32 +166,31 @@ export default function Hospitais() {
             value={search}
             onChangeText={(t) => {
               setSearch(t);
-              setShowSugestoes(true);
+              setShowSug(true);
             }}
             onFocus={() => {
-              setShowSugestoes(true);
+              setShowSug(true);
               setSugestoes(distritos);
             }}
           />
           <TouchableOpacity
             style={styles.searchIcon}
             onPress={() => {
-              setShowSugestoes(false);
-              dismissKeyboard();
+              setShowSug(false);
+              dismiss();
             }}
           >
             <Ionicons name="search" size={22} color="#000" />
           </TouchableOpacity>
         </View>
 
-        {/* SUGESTÕES */}
-        {search.trim() !== "" && showSugestoes && sugestoes.length > 0 && (
+        {search.trim() !== "" && showSug && sugestoes.length > 0 && (
           <View style={styles.suggestionsContainer}>
             {sugestoes.map((d) => (
               <TouchableOpacity
                 key={d}
                 style={styles.suggestionItem}
-                onPress={() => handleSelectSugestao(d)}
+                onPress={() => pickSugestao(d)}
               >
                 <Text style={styles.suggestionText}>{d}</Text>
               </TouchableOpacity>
@@ -195,7 +199,7 @@ export default function Hospitais() {
         )}
       </View>
 
-      {/* DATE TIME PICKER MODAL */}
+      {/* DATETIME PICKER */}
       <DateTimePickerModal
         isVisible={pickerVisible}
         mode="datetime"
@@ -203,152 +207,120 @@ export default function Hospitais() {
         minimumDate={new Date()}
         onConfirm={(date) => {
           setSlot(date);
-          setPickerVisible(false);
+          setPicker(false);
         }}
-        onCancel={() => setPickerVisible(false)}
+        onCancel={() => setPicker(false)}
         locale="pt-PT"
         is24Hour
       />
 
+      {/* CARD AGENDAMENTO */}
+      {selected && (
+        <View style={styles.inlineModal}>
+          <Text style={styles.modalTitle}>{selected.name}</Text>
+          <Text style={styles.modalSub}>{selected.distrito}</Text>
+
+          <Text style={styles.modalLabel}>Data & hora escolhidas:</Text>
+          <Text style={styles.modalDate}>
+            {slot ? slot.toLocaleString("pt-PT") : "—"}
+          </Text>
+
+          <TouchableOpacity
+            style={styles.agendarBtn}
+            onPress={() => setPicker(true)}
+          >
+            <Text style={styles.btnTxt}>Alterar data/hora</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.agendarBtn,
+              { backgroundColor: saving ? "#999" : "#4CAF50", marginTop: 12 },
+            ]}
+            onPress={confirmarAgendamento}
+            disabled={saving || !slot}
+          >
+            <Text style={styles.btnTxt}>
+              {saving ? "A gravar…" : "Confirmar"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.modalCancel}
+            onPress={() => {
+              setSelected(null);
+              setSlot(null);
+              setPicker(false);
+            }}
+          >
+            <Text style={{ color: "#c62828" }}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* LISTA DE HOSPITAIS */}
       {search.trim() !== "" && (
-        <View style={styles.section}>
+        <ScrollView contentContainerStyle={styles.section}>
           <Text style={styles.sectionTitle}>Hospitais encontrados</Text>
-          <FlatList
-            data={filteredHospitais}
-            keyExtractor={(i) => String(i.id)}
-            ListEmptyComponent={
-              <Text style={styles.emptyText}>Nenhum hospital encontrado.</Text>
-            }
-            renderItem={({ item }) => (
+          {filtered.length === 0 ? (
+            <Text style={styles.emptyText}>Nenhum hospital encontrado.</Text>
+          ) : (
+            filtered.map((item) => (
               <TouchableOpacity
+                key={item.id}
                 style={styles.localCard}
                 onPress={() => {
-                  setSelectedHospital(item);
-                  setSlot(new Date());
+                  setSelected(item);
+                  setPicker(true);
                 }}
               >
                 <Text style={styles.localText}>{item.name}</Text>
                 <Text style={styles.localText}>{item.distrito}</Text>
               </TouchableOpacity>
-            )}
-          />
-        </View>
-      )}
-
-      {selectedHospital && (
-        <View style={styles.inlineModal}>
-          <Text style={styles.modalTitle}>{selectedHospital.name}</Text>
-          <Text style={styles.modalSub}>{selectedHospital.distrito}</Text>
-          <Text style={styles.modalLabel}>Data &amp; hora escolhidas:</Text>
-          <Text style={styles.modalDate}>
-            {slot ? slot.toLocaleString() : "—"}
-          </Text>
-          <TouchableOpacity
-            style={styles.agendarBtn}
-            onPress={() => setPickerVisible(true)}
-          >
-            <Text style={{ color: "#fff" }}>Escolher data e hora</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.agendarBtn,
-              {
-                backgroundColor: saving ? "#999" : "#4CAF50",
-                marginTop: 12,
-              },
-            ]}
-            onPress={confirmarAgendamento}
-            disabled={saving || !slot}
-          >
-            <Text style={{ color: "#fff" }}>
-              {saving ? "A gravar…" : "Confirmar"}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.modalCancel}
-            onPress={cancelarAgendamento}
-          >
-            <Text style={{ color: "#c62828" }}>Cancelar / Fechar</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* REGALIAS */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Algumas Regalias</Text>
-        <Text style={styles.sectionSub}>
-          Usufrua de algumas regalias dos nossos parceiros…
-        </Text>
-
-        <FlatList
-          horizontal
-          data={PERKS}
-          showsHorizontalScrollIndicator={false}
-          keyExtractor={(i) => i.id}
-          renderItem={({ item }) => (
-            <View style={styles.perkCard}>
-              <Text style={styles.perkPhoto}>Foto</Text>
-              <Text style={styles.perkText}>{item.title}</Text>
-            </View>
+            ))
           )}
-        />
-
-        <TouchableOpacity onPress={() => navigation.navigate("Perks")}>
-          <Text style={styles.moreLink}>Veja mais…</Text>
-        </TouchableOpacity>
-      </View>
+        </ScrollView>
+      )}
 
       {/* FOOTER */}
       <View style={[styles.footer, { paddingBottom: insets.bottom || 12 }]}>
         <TouchableOpacity
+          onPress={() => goTo("Hospitais")}
           style={[
             styles.footerBtn,
-            selectedTab === "Hospitais" && styles.footerBtnActive,
+            activeTab === "Hospitais" && styles.footerBtnActive,
           ]}
-          onPress={() => {
-            setSelectedTab("Hospitais");
-            navigation.navigate("Hospitais");
-          }}
         >
           <Icon
             name="magnify"
             size={28}
-            color={selectedTab === "Hospitais" ? "#fff" : "#555"}
+            color={activeTab === "Hospitais" ? "#fff" : "#555"}
           />
         </TouchableOpacity>
-
         <TouchableOpacity
+          onPress={() => goTo("Home")}
           style={[
             styles.footerBtn,
-            selectedTab === "Home" && styles.footerBtnActive,
+            activeTab === "Home" && styles.footerBtnActive,
           ]}
-          onPress={() => {
-            setSelectedTab("Home");
-            navigation.navigate("Home");
-          }}
         >
           <Icon
             name="home"
-            size={30}
-            color={selectedTab === "Home" ? "#fff" : "#555"}
+            size={28}
+            color={activeTab === "Home" ? "#fff" : "#555"}
           />
         </TouchableOpacity>
-
         <TouchableOpacity
+          onPress={() => goTo("Perfil")}
           style={[
             styles.footerBtn,
-            selectedTab === "Perfil" && styles.footerBtnActive,
+            activeTab === "Perfil" && styles.footerBtnActive,
           ]}
-          onPress={() => {
-            setSelectedTab("Perfil");
-            navigation.navigate("Perfil");
-          }}
         >
           <Icon
             name="account"
             size={28}
-            color={selectedTab === "Perfil" ? "#fff" : "#555"}
+            color={activeTab === "Perfil" ? "#fff" : "#555"}
           />
         </TouchableOpacity>
       </View>
@@ -357,6 +329,7 @@ export default function Hospitais() {
 }
 
 const styles = StyleSheet.create({
+  /* LAYOUT */
   safeArea: {
     flex: 1,
     backgroundColor: "#fff",
@@ -372,6 +345,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
   },
+  /* SEARCH */
   searchWrapper: {
     marginTop: 40,
     alignSelf: "center",
@@ -417,6 +391,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#333",
   },
+
+  /* LISTA HOSPITAIS */
   section: {
     marginTop: 32,
     paddingHorizontal: 16,
@@ -425,10 +401,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "bold",
   },
-  sectionSub: {
-    fontSize: 12,
-    color: "#555",
-    marginBottom: 12,
+  emptyText: {
+    color: "#666",
+    textAlign: "center",
+    marginTop: 20,
   },
   localCard: {
     width: "100%",
@@ -447,77 +423,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 2,
   },
-  emptyText: {
-    color: "#666",
-    textAlign: "center",
-    marginTop: 20,
-  },
-  perkCard: {
-    width: 90,
-    marginHorizontal: 6,
-    alignItems: "center",
-  },
-  perkPhoto: {
-    width: "100%",
-    aspectRatio: 1,
-    backgroundColor: "#d9d9d9",
-    borderRadius: 4,
-    textAlign: "center",
-    textAlignVertical: "center",
-    color: "#666",
-  },
-  perkText: {
-    fontSize: 11,
-    textAlign: "center",
-    marginTop: 4,
-  },
-  moreLink: {
-    color: "#007AFF",
-    marginTop: 6,
-    alignSelf: "flex-end",
-  },
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "space-around",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#ddd",
-  },
-  footerBtn: {
-    flex: 1,
-    alignItems: "center",
-    paddingVertical: 10,
-  },
-  footerBtnActive: {
-    backgroundColor: "#c62828",
-    borderTopLeftRadius: 18,
-    borderTopRightRadius: 18,
-  },
-  overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 20,
-  },
-  modal: {
-    width: "90%", // aumenta a largura
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    paddingVertical: 28, // mais espaço vertical
-    paddingHorizontal: 18, // mais espaço horizontal
-    alignItems: "center",
-    justifyContent: "center",
-  },
+
+  /* MODAL / AGENDAMENTO */
   inlineModal: {
     backgroundColor: "#fff",
     borderRadius: 16,
@@ -572,9 +479,37 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
   },
+  btnTxt: {
+    color: "#fff",
+    fontWeight: "600",
+  },
   modalCancel: {
     marginTop: 18,
     width: "100%",
     alignItems: "center",
+  },
+
+  /* FOOTER */
+  footer: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "space-around",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#ddd",
+  },
+  footerBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 10,
+  },
+  footerBtnActive: {
+    backgroundColor: "#c62828",
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
   },
 });

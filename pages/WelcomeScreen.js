@@ -73,7 +73,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     textAlign: "center",
     top: "45%",
-    left: "36%",
+    left: "41.5%",
     transform: [{ translateX: -50 }, { translateY: -50 }],
   },
   subtitle: {
@@ -84,7 +84,7 @@ const styles = StyleSheet.create({
     position: "absolute",
     textAlign: "center",
     top: "53%",
-    left: "38%",
+    left: "42%",
     transform: [{ translateX: -50 }, { translateY: -50 }],
   },
   buttonContainer: {

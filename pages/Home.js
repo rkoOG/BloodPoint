@@ -66,7 +66,7 @@ export default function HomeScreen({ route, navigation }) {
       const { data } = await supabase
         .from("utilizadores")
         .select("nome,name,idade,tipo_sanguineo")
-        .eq("id", user.id)
+        .eq("id", authUser.id)
         .maybeSingle();
 
       setUserData(
@@ -185,7 +185,7 @@ export default function HomeScreen({ route, navigation }) {
         <TouchableOpacity
           onPress={() => {
             setActiveTab("Hospitais");
-            navigation.navigate("Hospitais");
+            navigation.navigate("Hospitais", { userData });
           }}
           style={[
             styles.footerBtn,
@@ -202,7 +202,7 @@ export default function HomeScreen({ route, navigation }) {
         <TouchableOpacity
           onPress={() => {
             setActiveTab("Home");
-            navigation.navigate("Home");
+            navigation.navigate("Home", { userData });
           }}
           style={[
             styles.footerBtn,

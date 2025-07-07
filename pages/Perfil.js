@@ -260,7 +260,7 @@ export default function Perfil() {
         <TouchableOpacity
           onPress={() => {
             setActiveTab("Hospitais");
-            navigation.navigate("Hospitais");
+            navigation.navigate("Hospitais", { userData: user });
           }}
           style={[
             styles.footerBtn,
@@ -276,7 +276,7 @@ export default function Perfil() {
         <TouchableOpacity
           onPress={() => {
             setActiveTab("Home");
-            navigation.navigate("Home");
+            navigation.navigate("Home", { userData: user });
           }}
           style={[
             styles.footerBtn,
