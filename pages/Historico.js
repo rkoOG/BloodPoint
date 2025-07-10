@@ -188,6 +188,7 @@ export default function Historico() {
 
   // ────────────── RENDERERS ────────────────────────────────────
   const Card = ({ d }) => (
+    
     <View style={styles.card}>
       <Text style={styles.cardDate}>{d.date}</Text>
       <Text style={styles.cardPartner}>{d.partner}</Text>

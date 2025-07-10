@@ -9,7 +9,10 @@ import {
   Platform,
   Image,
 } from "react-native";
+
 import { Ionicons } from "@expo/vector-icons";
+import { STATUS } from "./hospitais";
+import { supabase } from "../global/supabaseClient"; 
 
 const CodigoQR = ({ navigation }) => {
   const [code, setCode] = useState(["", "", "", "", "", ""]);
@@ -30,12 +33,40 @@ const CodigoQR = ({ navigation }) => {
     }
   };
 
-  const submitCode = () => {
+  const submitCode = async () => {
     const finalCode = code.join("");
+    console.log("Código inserido:", finalCode);
     if (finalCode.length === 6) {
-      alert("Código enviado: " + finalCode);
+      const {data, error} = await supabase
+        .from("doacoes")
+        .select("*")
+        .eq("confirm_code", finalCode)
+        .eq("status", STATUS.PENDENTE)
+        .maybeSingle();
+
+      if (error) {
+        Alert.alert("Erro", "Não foi possível validar o código.");
+        return;
+      }
+      
+      if (data) { //Atualizar o status da doação
+        const { error:updateError } = await supabase
+          .from("doacoes")
+          .update({ status: STATUS.CONFIRMADA })
+          .eq("confirm_code", finalCode);
+
+        if (updateError) {
+          alert("Erro", "Erro ao confirmar a doação.");
+        } else {
+          alert("Sucesso", "A doação foi confirmada com sucesso!");
+        }
+      } else {
+        alert("Erro", "Código inválido ou já utilizado.");
+      }
+
     } else {
-      alert("Por favor preencha os 6 dígitos.");
+      Alert.alert("Erro", "Por favor, insira um código de 6 dígitos.");
+      return;
     }
   };
 
@@ -64,7 +95,7 @@ const CodigoQR = ({ navigation }) => {
       </View>
       <Text style={styles.title}>Insira o código:</Text>
       <Text style={styles.subtitle}>
-        Insira o código fornecido pelo enfermeiro para que a sua doação seja
+        Insira o código fornecido para que a sua doação seja
         validada.
       </Text>
 

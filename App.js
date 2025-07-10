@@ -2,18 +2,18 @@ import React from "react";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
-import Perfil from "./src/pages/Perfil";
-import CodigoQR from "./src/pages/CodigoQR";
-import Hospitais from "./src/pages/hospitais";
-import Cupao from "./src/pages/Cupao";
-import Parceiros from "./src/pages/Parceiros";
-import Historico from "./src/pages/Historico";
-import Home from "./src/pages/Home";
-import Login from "./src/pages/Login";
-import RegisterScreen from "./src/pages/RegisterScreen";
-import UltimosDadosScreen from "./src/pages/UltimosDadosScreen";
-import WelcomeScreen from "./src/pages/WelcomeScreen";
-import Formulario from "./src/pages/Formulario";
+import Perfil from "./pages/Perfil";
+import CodigoQR from "./pages/CodigoQR";
+import Hospitais from "./pages/hospitais";
+import Cupao from "./pages/Cupao";
+import Parceiros from "./pages/Parceiros";
+import Historico from "./pages/Historico";
+import Home from "./pages/Home";
+import Login from "./pages/Login";
+import RegisterScreen from "./pages/RegisterScreen";
+import UltimosDadosScreen from "./pages/UltimosDadosScreen";
+import WelcomeScreen from "./pages/WelcomeScreen";
+import Formulario from "./pages/Formulario";
 
 const Stack = createNativeStackNavigator();
 

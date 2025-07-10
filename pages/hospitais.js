@@ -118,7 +118,7 @@ export default function Hospitais() {
       return;
     }
 
-    const code = Math.random().toString(36).slice(-6).toUpperCase();
+    const code = Math.floor(100000 + Math.random() * 900000).toString(); // 6 Código numérico
 
     const { error } = await supabase.from("doacoes").insert({
       doador_id: user.id,
@@ -136,7 +136,7 @@ export default function Hospitais() {
     }
 
     Alert.alert(
-      "Agendado!",
+      "Agendado, guarda bem este código!",
       `Código ${code}.\nVê em Perfil → Histórico de Doações.`
     );
     navigation.navigate("Perfil", { userData: passedUser });
